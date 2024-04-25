@@ -25,7 +25,6 @@ import org.keycloak.storage.StorageId;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.user.UserLookupProvider;
 import org.keycloak.storage.user.UserQueryProvider;
-import org.keycloak.storage.user.UserRegistrationProvider;
 
 import com.keycloak.userstorage.external.DbUtil;
 import com.keycloak.userstorage.user.ExternalUser;
@@ -38,14 +37,16 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class ExternalUserStorageProvider implements UserStorageProvider, UserLookupProvider, UserQueryProvider,
-													CredentialInputValidator, UserRegistrationProvider  //CredentialInputUpdater,
+													CredentialInputValidator  
 {
 
 	private KeycloakSession ksession;
 	private ComponentModel model;
 	protected Map<String, UserModel> loadedUsers = new HashMap<>();
 	
-    
+    private static Integer LIMIT = 10;
+    private static Integer OFFSET = 0;
+	
     public ExternalUserStorageProvider(KeycloakSession session, ComponentModel model) {
     	this.ksession = session;
 		this.model = model;
@@ -218,17 +219,17 @@ public class ExternalUserStorageProvider implements UserStorageProvider, UserLoo
 
 	// ------------------- Implementation
 
-	@Override
-	public UserModel addUser(RealmModel realm, String username) {
-		log.info("[USERSTORAGE addUser]");
-		return null;
-	}
-
-	@Override
-	public boolean removeUser(RealmModel realm, UserModel user) {
-		log.info("[USERSTORAGE removeUser]");
-		return false;
-	}
+//	@Override
+//	public UserModel addUser(RealmModel realm, String username) {
+//		log.info("[USERSTORAGE addUser]");
+//		return null;
+//	}
+//
+//	@Override
+//	public boolean removeUser(RealmModel realm, UserModel user) {
+//		log.info("[USERSTORAGE removeUser]");
+//		return false;
+//	}
 	
 
 	
@@ -364,16 +365,55 @@ public class ExternalUserStorageProvider implements UserStorageProvider, UserLoo
 	
 	public  Stream<UserModel> GET_USER_STREAM(RealmModel realm , 
 												  Map<String, String> params,
-												  Integer firstResult,
-												  Integer maxResults) {
+												  Integer offset,
+												  Integer limit) {
 		
-		log.info("[Querys > GET_USER_STREAM2] " );
+		log.info("[Querys > GET_USER_STREAM2] OFFSET = {} / LIMIT = {} /             " ,OFFSET , LIMIT );
+		log.info("[Querys > GET_USER_STREAM2] offset = {} / limit = {} /  params = {}" ,offset , limit ,params.toString());
 		
+		if(limit == null) {//limit
+			limit = LIMIT;
+		}else {
+			LIMIT = limit;
+		}
+		
+		if(offset == null) {//offset
+			offset = OFFSET;
+			OFFSET = OFFSET+LIMIT;
+		}else {
+			OFFSET = offset;
+		}
+		
+		
+		
+		String searchText = params.get("keycloak.session.realm.users.query.search");
+		String str = params.get("search");
+		log.info("str = {} / searchText = {}",str , searchText);
+		for(String key : params.keySet()) {
+			log.info("key = {} / value = {}" , key , params.get(key));
+		}
+		String query = "";
+		query += " select username                                            \n";
+		query += "      , email                                               \n";
+		query += "      , firstName                                           \n";
+		query += "      , lastName                                            \n";
+		query += "      , to_char(birthDate, 'yyyy-mm-dd') as birthDay        \n";
+		query += " from   users                                               \n";
+		query += " where  1=1                                                 \n";
+		if(searchText != null && !searchText.equals("") && !searchText.trim().equals("*")) {                
+		query += " and    username like concat('%','" + searchText + "' ,'%') \n";
+	    }                                                                   
+	    query += " order by username                                          \n";
+		query += " limit  " + limit                                     +     "\n";
+		query += " offset " + offset                                    +     "\n";
+		
+		log.info("[Querys > GET_USER_STREAM2] query = {}" ,query);       
+		       
 		try (Connection c = DbUtil.getConnection(model)) {
-			PreparedStatement st = c.prepareStatement(" select username , email, firstName,lastName, to_char(birthDate, 'yyyy-mm-dd') as birthDay "
-					+ " from users " + " order by username " + " limit ? offset ?");
-			st.setInt(1, maxResults);
-			st.setInt(2, firstResult);
+			PreparedStatement st = 
+					c.prepareStatement(query);
+//			st.setInt(1, maxResults);
+//			st.setInt(2, firstResult);
 			st.execute();
 			ResultSet rs = st.getResultSet();
 			List<UserModel> users = getUsers(rs, realm);

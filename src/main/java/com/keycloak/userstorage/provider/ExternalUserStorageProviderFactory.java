@@ -31,8 +31,6 @@ public class ExternalUserStorageProviderFactory implements UserStorageProviderFa
     
     public ExternalUserStorageProviderFactory() {
         log.info("[ExternalUserStorageProviderFactory] ExternalUserStorageProviderFactory created");
-        
-        
         // Create config metadata
         configMetadata = ProviderConfigurationBuilder.create()
           .property()
